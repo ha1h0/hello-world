@@ -1,0 +1,200 @@
+
+一、
+linux 远程调试及 tomcat 防内存溢出
+
+CATALINA_OPTS="-Xdebug  -Xrunjdwp:transport=dt_socket,address=8090,server=y,suspend=n"
+
+JAVA_OPTS="-Xms256m -Xmx512m -Xss1024K -XX:PermSize=128m -XX:MaxPermSize=256m"
+
+
+ubuntu 文件readonly的问题: W10: Warning: Changing a readonly file 解决办法
+日前,笔者遇到一个奇怪且让人蛋疼的问题,借用别人的话"大家在linux上编辑文件的时候，明明是使用的root登录的，可是这种至高无上的权限在按下i的时候被那串红色错误亵渎了W10: Warning: Changing a readonly file".
+笔者也是百思不得解,困扰两天后,终于灵光一闪,奇迹的解决了这个问题,那就是:
+修改完成后使用:wq! 强制保存退出!!!!
+
+
+修改权限命令：
+chmod 777 文件名
+
+二、
+yum 安装mysql
+
+1 通过 Xshell连接到阿里云 CentOS 7 服务器；
+2 进入到目录 /usr/local/ 中：
+cd /usr/local/
+3 创建目录 /usr/local/tools，如果有则忽略： 
+mkdir -p tools
+4 创建 /usr/local/mysql 目录，如果已存在则忽略：
+mkdir -p mysql
+5 进入到目录 /usr/local/tools 中：
+cd tools/
+6 查看系统中是否已安装 MySQL 服务：
+rpm -qa | grep mysql
+或
+yum list installed | grep mysql
+7 如果已安装则删除 MySQL 及其依赖的包：
+yum -y remove mysql-libs.x86_64
+8 下载 mysql57-community-release-el7-8.noarch.rpm 的 YUM 源：
+wget http://repo.mysql.com/mysql57-community-release-el7-8.noarch.rpm
+9 安装 mysql57-community-release-el7-8.noarch.rpm：
+rpm -ivh mysql57-community-release-el7-8.noarch.rpm
+安装完后，得到如下两个包：
+mysql-community.repo
+mysql-community-source.repo
+10 安装 MySQL：
+yum install mysql-server
+遇到疑问的地方，一路 Y 下去即可；
+安装完毕后，通过service mysqld start启动服务，在  /var/log/mysqld.log 文件中会自动生成一个随机的密码，我们需要先取得这个随机密码，以用于登录 MySQL 服务端：
+grep "password" /var/log/mysqld.log
+打印如下内容：
+A temporary password is generated for root@localhost: hilX0U!9i3_6
+我们复制 root@localhost: 后面的随机字符串，这个字符串就是 MySQL 在安装完成后为我们随机生成的密码；
+12 登录到 MySQL 服务端并更新用户 root 的密码：
+mysql -u root -philX0U!9i3_6
+打印出 MySQL 的版本即表明已登录；
+设置用户 root 可以在任意 IP 下被访问：
+grant all privileges on *.* to root@"%" identified by "新密码";
+设置用户 root 可以在本地被访问：
+grant all privileges on *.* to root@"localhost" identified by "新密码";
+刷新权限使之生效：
+flush privileges;
+更新 MySQL 的用户 root的密码：
+set password = password('新密码'); 
+注意：由于 MySQL5.7 采用了密码强度验证插件 validate_password，故此我们需要设置一个有一定强度的密码；
+输入 exit 后用新密码再次登录看看吧！
+13 查看 MySQL 当前都内置了哪些数据库：
+mysql> show databases;
+我们发现其内置了如下一些数据库：
+information_schema
+mysql              
+performance_schema
+sys 
+14 启动 MySQL 服务：
+service mysqld start
+
+15 关闭 MySQL 服务：
+service mysqld stop
+16 重启 MySQL 服务：
+service mysqld restart
+17 查看 MySQL 的状态：
+service mysqld status
+18 查看 MySQL 的字符集：
+mysql> show variables like '%character%';
++--------------------------+----------------------------+
+| Variable_name            | Value                      |
++--------------------------+----------------------------+
+| character_set_client    | utf8                      |
+| character_set_connection | utf8                      |
+| character_set_database  | latin1                    |
+| character_set_filesystem | binary                    |
+| character_set_results    | utf8                      |
+| character_set_server    | latin1                    |
+| character_set_system    | utf8                      |
+| character_sets_dir      | /usr/share/mysql/charsets/ |
++--------------------------+----------------------------+
+8 rows in set (0.01 sec)
+查看指定的数据库中指定数据表的字符集，如查看 mysql 数据库中 servers 表的字符集：
+  show table status from mysql like '%servers%';
+查看指定数据库中指定表的全部列的字符集，如查看 mysql 数据库中 servers 表的全部的列的字符集：
+show full columns from servers;
+19 设置 MySQL 的字符集为 UTF-8：
+打开 /etc 目录下的 my.cnf 文件（此文件是 MySQL 的主配置文件）：
+/etc/my.cnf
+在 [mysqld] 前添加如下代码：
+[client]
+default-character-set=utf8
+在 [mysqld] 后添加如下代码：
+character_set_server=utf8
+再次查看字符集：
+mysql> show variables like '%character%';
++--------------------------+----------------------------+
+| Variable_name            | Value                      |
++--------------------------+----------------------------+
+| character_set_client    | utf8                      |
+| character_set_connection | utf8                      |
+| character_set_database  | utf8                      |
+| character_set_filesystem | binary                    |
+| character_set_results    | utf8                      |
+| character_set_server    | utf8                      |
+| character_set_system    | utf8                      |
+| character_sets_dir      | /usr/share/mysql/charsets/ |
++--------------------------+----------------------------+
+8 rows in set (0.01 sec)
+20 /var/lib/mysql 是存放数据库文件的目录；
+21 /var/log 目录下的 mysqld.log 文件记录 MySQL 的日志；
+22 MySQL 采用的 TCP/IP 协议传输数据，默认端口号为 3306，我们可以通过如下命令查看：
+netstat -anp
+23 忘记密码时，可用如下方法重置：
+# service mysqld stop
+# mysqld_safe --user=root --skip-grant-tables --skip-networking &
+# mysql -u root 
+mysql> use mysql;
+mysql> update user set password=password("new_password") where user="root"; 
+mysql> flush privileges;
+
+三、
+解压
+rpm -ivh /home/jdk-8u91-linux-x64.rpm
+
+环境变量设置
+
+#vim /etc/profile
+ 
+#set java environment
+JAVA_HOME=/usr/java/jdk1.7.0_76
+JRE_HOME=/usr/java/jdk1.7.0_76/jre
+CLASS_PATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar:$JRE_HOME/lib
+PATH=$PATH:$JAVA_HOME/bin:$JRE_HOME/bin
+export JAVA_HOME JRE_HOME CLASS_PATH PATHda
+
+
+然后保存退出,使环境变量生效
+source /etc/profile
+
+四、
+tomcat 部署
+
+1、下载tomcat
+选择core下面的tar.gz包下载
+2、上传和安装
+我是把上传的软件都放在了home文件夹，解压即可实现安装，安装目录我放在了/usr/local下面
+#tar -zxvf apache-tomcat-8.0.33.tar.gz //解压文件   或者：tar xvf apache-tomcat-8.0.33.tar.gz
+#cp -R apache-tomcat-8.0.33 /usr/local/tomcat //移动和重命名
+3、进入目录cd /usr/local/tomcat/bin/，启动和测试Tomcat
+#./startup.sh  //在tomcat的bin目录下执行此命令，显示下面的信息
+Using CATALINA_BASE:   /usr/local/tomcat
+Using CATALINA_HOME:   /usr/local/tomcat
+Using CATALINA_TMPDIR: /usr/local/tomcat/temp
+Using JRE_HOME:        /usr/java/jdk1.7.0_67
+Using CLASSPATH:       /usr/local/tomcat/bin/bootstrap.jar:/usr/local/tomcat/bin/tomcat-juli.jar
+Tomcat started.
+测试：访问http://ip:8080,查看是否成功，如果不成功，检查端口情况
+#netstat -ano|grep 8080
+如果端口被占用，可以修改/conf/server.xml 里的端口号
+用./stratup.sh启动看不到详细的日志信息，如果想看详细信息，可以用./catalina.sh run启动，就可以像中一样查看启动信息了
+4、在/usr/local/tomcat/bin下有可执行程序
+启动tomcat #  ./startup.sh
+关闭tomcat #  ./shutdown.sh
+5、查看Tomcat是否启动
+# ps -ef |grep tomcat
+如果返回类似以下信息说明tomcat没有启动
+502 19258 8770 0 7:14下午 ttys000 0:00.01 grep tomcat
+如果返回类似以下信息出现，说明tomcat是启动了，第一个是启动该进程的用户，第二个是该进程的id，第三个 是占用CPU的百分比，
+第四个是占用内存的百分比
+root      2078     1 33 09:32 pts/0    00:00:01 /usr/java/jdk1.8.0_91/bin/java -Djava.util.logging.config.file=/usr/local/tomcat/conf/logging.properties -Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager -Djava.endorsed.dirs=/usr/local/tomcat/endorsed -classpath /usr/local/tomcat/bin/bootstrap.jar:/usr/local/tomcat/bin/tomcat-juli.jar -Dcatalina.base=/usr/local/tomcat -Dcatalina.home=/usr/local/tomcat -Djava.io.tmpdir=/usr/local/tomcat/temp org.apache.catalina.startup.Bootstrap start
+root      2091  2019  0 09:32 pts/0    00:00:00 grep --color=auto tomcat
+
+6、设置tomcat开机启动的方法
+1、修改/etc/rc.d/rc.local
+vi /etc/rc.d/rc.local
+2、添加下面两行脚本，记住是两行，仅仅第二行不行，必须加第一行。
+在/etc/rc.d/rc.local文件最后加上
+export JAVA_HOME=/usr/java/jdk1.8.0_91
+/usr/local/tomcat/bin/startup.sh start
+ 说明：/usr/java/jdk1.8.0_91 是jdk安装目录
+/usr/local/tomcat 是tomcat安装的目录
+3、注意，进入/etc/rc.d修改rc.local文件为可执行，如： chmod +x rc.local
+
+
+
+
